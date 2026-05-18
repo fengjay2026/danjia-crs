@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
 import { getDatabase, ref, set, get, remove, onValue, push, update, query, orderByChild, equalTo } from 'firebase/database';
 import { getStudents as getLocalStudents, getStudentById as getLocalStudentById, addStudent as addLocalStudent, updateStudent as updateLocalStudent, deleteStudent as deleteLocalStudent } from './data/store';
 
@@ -183,3 +183,46 @@ export async function migrateLocalData() {
 }
 
 export { auth, database };
+
+// ========== Firebase 登录 + 同步 ==========
+
+const FIREBASE_EMAIL_KEY = 'danjia_firebase_email';
+const FIREBASE_TOKEN_KEY = 'danjia_firebase_token';
+
+// 获取缓存的 Firebase 登录信息
+export function getCachedFirebaseEmail() {
+  return localStorage.getItem(FIREBASE_EMAIL_KEY) || '';
+}
+
+// 用邮箱密码登录 Firebase
+export async function loginFirebase(email, password) {
+  const result = await signInWithEmailAndPassword(auth, email, password);
+  // 缓存登录信息
+  localStorage.setItem(FIREBASE_EMAIL_KEY, email);
+  return result;
+}
+
+// 检查 Firebase 是否已登录
+export function isFirebaseLoggedIn() {
+  return !!auth.currentUser;
+}
+
+// 带 Firebase 认证的同步（先登录再同步）
+export async function syncWithFirebase(email, password) {
+  try {
+    // 登录 Firebase
+    await loginFirebase(email, password);
+
+    // 同步数据
+    const result = await migrateLocalData();
+    return result;
+  } catch (error) {
+    const errorMap = {
+      'auth/user-not-found': 'Firebase 邮箱未注册',
+      'auth/wrong-password': 'Firebase 密码错误',
+      'auth/invalid-credential': '邮箱或密码错误',
+      'auth/too-many-requests': '登录过于频繁，请稍后再试',
+    };
+    return { success: false, error: errorMap[error.code] || error.message || 'Firebase 登录失败' };
+  }
+}

@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Badge, Modal, Button, message, Upload, Space, Tag, Tooltip } from 'antd';
+import { Badge, Modal, Button, message, Upload, Space, Tag, Tooltip, Input } from 'antd';
 import { DownloadOutlined, UploadOutlined, InboxOutlined, LogoutOutlined, CloudSyncOutlined } from '@ant-design/icons';
 import { isAdmin } from '../data/userStore';
 import { useAuth } from '../context/AuthContext';
-import { migrateLocalData } from '../firebase';
 
 const menuItems = [
   { key: '/dashboard', label: '仪表盘', icon: '📊' },
@@ -128,21 +127,36 @@ function Sidebar({ onNavigate }) {
   function SyncButton() {
     const { user, logout } = useAuth();
     const [syncing, setSyncing] = useState(false);
+    const [fbModalVisible, setFbModalVisible] = useState(false);
+    const [fbEmail, setFbEmail] = useState(localStorage.getItem('danjia_firebase_email') || 'nehfgze911@163.com');
+    const [fbPassword, setFbPassword] = useState('');
 
     const handleSync = async () => {
+      setFbModalVisible(true);
+    };
+
+    const confirmSync = async () => {
+      setFbModalVisible(false);
       setSyncing(true);
       try {
-        const result = await migrateLocalData();
+        const { syncWithFirebase } = await import('../firebase');
+        const result = await syncWithFirebase(fbEmail, fbPassword);
         if (result.success) {
           message.success('本地数据已同步到云端！');
         } else {
-          message.error('同步失败');
+          message.error(result.error || '同步失败');
         }
       } catch (e) {
         message.error('同步失败: ' + e.message);
       } finally {
         setSyncing(false);
+        setFbPassword('');
       }
+    };
+
+    const handleLogout = () => {
+      logout();
+      window.location.reload();
     };
 
     return (
@@ -150,8 +164,7 @@ function Sidebar({ onNavigate }) {
         {user ? (
           <div>
             <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, marginBottom: 6 }}>
-              <Tag color="green" style={{ fontSize: 10 }}>☁️ 已连接</Tag>
-              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, marginLeft: 4 }}>{user.email}</span>
+              <span style={{ fontSize: 11 }}>👤 {user.nickname || user.username}</span>
             </div>
             <Space direction="vertical" size={4} style={{ width: '100%' }}>
               <Button
@@ -166,23 +179,39 @@ function Sidebar({ onNavigate }) {
               <Button
                 size="small"
                 icon={<LogoutOutlined />}
-                onClick={() => { logout(); window.location.reload(); }}
+                onClick={handleLogout}
                 style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 11 }}
               >
                 退出登录
               </Button>
             </Space>
+
+            {/* Firebase 密码弹窗 */}
+            <Modal
+              title="☁️ 同步到 Firebase"
+              open={fbModalVisible}
+              onCancel={() => setFbModalVisible(false)}
+              onOk={confirmSync}
+              okText="同步"
+              cancelText="取消"
+              width={400}
+            >
+              <div style={{ padding: '8px 0' }}>
+                <p style={{ marginBottom: 16, color: '#666' }}>
+                  将本地数据同步到 Firebase 云端数据库，其他用户登录后即可查看。
+                </p>
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 13, color: '#333', marginBottom: 4 }}>Firebase 邮箱</div>
+                  <Input value={fbEmail} onChange={e => setFbEmail(e.target.value)} placeholder="Firebase 邮箱" />
+                </div>
+                <div style={{ marginBottom: 4 }}>
+                  <div style={{ fontSize: 13, color: '#333', marginBottom: 4 }}>Firebase 密码</div>
+                  <Input.Password value={fbPassword} onChange={e => setFbPassword(e.target.value)} placeholder="请输入 Firebase 密码" />
+                </div>
+              </div>
+            </Modal>
           </div>
-        ) : (
-          <Button
-            size="small"
-            icon={<CloudSyncOutlined />}
-            onClick={() => navigate('/login')}
-            style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: 'none', color: 'rgba(255,255,255,0.7)', fontSize: 11 }}
-          >
-            登录云端
-          </Button>
-        )}
+        ) : null}
       </div>
     );
   }
