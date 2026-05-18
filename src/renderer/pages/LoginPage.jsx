@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, Form, Input, Button, message, Typography, Divider } from 'antd';
 import { MailOutlined, LockOutlined } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const { Title, Text } = Typography;
 
@@ -11,9 +12,17 @@ const COLORS = {
 };
 
 export default function LoginPage() {
-  const { login, register } = useAuth();
+  const { user, login, register } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [isRegister, setIsRegister] = useState(false);
+
+  // 已登录则跳转
+  useEffect(() => {
+    if (user) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [user, navigate]);
 
   const handleSubmit = async (values) => {
     setLoading(true);
@@ -21,9 +30,11 @@ export default function LoginPage() {
       if (isRegister) {
         await register(values.email, values.password);
         message.success('注册成功！');
+        navigate('/dashboard', { replace: true });
       } else {
         await login(values.email, values.password);
         message.success('登录成功！');
+        navigate('/dashboard', { replace: true });
       }
     } catch (error) {
       const errorMap = {
