@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Badge, Modal, Button, message, Upload, Space } from 'antd';
-import { DownloadOutlined, UploadOutlined, InboxOutlined } from '@ant-design/icons';
+import { Badge, Modal, Button, message, Upload, Space, Tag, Tooltip } from 'antd';
+import { DownloadOutlined, UploadOutlined, InboxOutlined, LogoutOutlined, CloudSyncOutlined } from '@ant-design/icons';
 import { isAdmin } from '../data/userStore';
+import { useAuth } from '../context/AuthContext';
+import { migrateLocalData } from '../firebase';
 
 const menuItems = [
   { key: '/dashboard', label: '仪表盘', icon: '📊' },
@@ -122,6 +124,69 @@ function Sidebar({ onNavigate }) {
     });
   };
 
+  // 云端同步按钮组件
+  function SyncButton() {
+    const { user, logout } = useAuth();
+    const [syncing, setSyncing] = useState(false);
+
+    const handleSync = async () => {
+      setSyncing(true);
+      try {
+        const result = await migrateLocalData();
+        if (result.success) {
+          message.success('本地数据已同步到云端！');
+        } else {
+          message.error('同步失败');
+        }
+      } catch (e) {
+        message.error('同步失败: ' + e.message);
+      } finally {
+        setSyncing(false);
+      }
+    };
+
+    return (
+      <div>
+        {user ? (
+          <div>
+            <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, marginBottom: 6 }}>
+              <Tag color="green" style={{ fontSize: 10 }}>☁️ 已连接</Tag>
+              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, marginLeft: 4 }}>{user.email}</span>
+            </div>
+            <Space direction="vertical" size={4} style={{ width: '100%' }}>
+              <Button
+                size="small"
+                icon={<CloudSyncOutlined />}
+                onClick={handleSync}
+                loading={syncing}
+                style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: 'none', color: 'rgba(255,255,255,0.7)', fontSize: 11 }}
+              >
+                {syncing ? '同步中...' : '同步到云端'}
+              </Button>
+              <Button
+                size="small"
+                icon={<LogoutOutlined />}
+                onClick={() => { logout(); window.location.reload(); }}
+                style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 11 }}
+              >
+                退出登录
+              </Button>
+            </Space>
+          </div>
+        ) : (
+          <Button
+            size="small"
+            icon={<CloudSyncOutlined />}
+            onClick={() => navigate('/login')}
+            style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: 'none', color: 'rgba(255,255,255,0.7)', fontSize: 11 }}
+          >
+            登录云端
+          </Button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="sidebar">
       <div className="sidebar-logo">
@@ -198,6 +263,11 @@ function Sidebar({ onNavigate }) {
           </Space>
         </div>
         )}
+        {/* 用户信息 */}
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginBottom: 6 }}>👤 账户</div>
+          <SyncButton />
+        </div>
         <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>
           v1.0.0 · 数据存储于本地
         </div>

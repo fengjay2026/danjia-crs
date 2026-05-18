@@ -10,8 +10,8 @@ import StudentForm from './pages/StudentForm';
 import DocumentCenter from './pages/DocumentCenter';
 import ApplicationTracker from './pages/ApplicationTracker';
 import ScheduleManager from './pages/ScheduleManager';
-import Login from './pages/Login';
-import { getCurrentUser } from './data/userStore';
+import LoginPage from './pages/LoginPage';
+import { AuthProvider, useAuth } from './context/AuthContext';
 
 const theme = {
   token: {
@@ -22,44 +22,56 @@ const theme = {
 
 // 需要登录的路由守卫
 function RequireAuth({ children }) {
-  const user = getCurrentUser();
+  const { user, loading } = useAuth();
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <span>加载中...</span>
+      </div>
+    );
+  }
   if (!user) {
     return <Navigate to="/login" replace />;
   }
   return children;
 }
 
+function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route
+        path="/*"
+        element={
+          <RequireAuth>
+            <Layout>
+              <Routes>
+                <Route path="/" element={<Navigate to="/dashboard" />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/students" element={<StudentList />} />
+                <Route path="/students/new" element={<StudentForm />} />
+                <Route path="/students/:id" element={<StudentDetail />} />
+                <Route path="/students/:id/edit" element={<StudentForm />} />
+                <Route path="/documents" element={<DocumentCenter />} />
+                <Route path="/applications" element={<ApplicationTracker />} />
+                <Route path="/schedule" element={<ScheduleManager />} />
+              </Routes>
+            </Layout>
+          </RequireAuth>
+        }
+      />
+    </Routes>
+  );
+}
+
 function App() {
   return (
     <ConfigProvider theme={theme} locale={zhCN}>
-      <Router>
-        <Routes>
-          {/* 登录页 - 不需要 Layout */}
-          <Route path="/login" element={<Login />} />
-
-          {/* 受保护的路由 */}
-          <Route
-            path="/*"
-            element={
-              <RequireAuth>
-                <Layout>
-                  <Routes>
-                    <Route path="/" element={<Navigate to="/dashboard" />} />
-                    <Route path="/dashboard" element={<Dashboard />} />
-                    <Route path="/students" element={<StudentList />} />
-                    <Route path="/students/new" element={<StudentForm />} />
-                    <Route path="/students/:id" element={<StudentDetail />} />
-                    <Route path="/students/:id/edit" element={<StudentForm />} />
-                    <Route path="/documents" element={<DocumentCenter />} />
-                    <Route path="/applications" element={<ApplicationTracker />} />
-                    <Route path="/schedule" element={<ScheduleManager />} />
-                  </Routes>
-                </Layout>
-              </RequireAuth>
-            }
-          />
-        </Routes>
-      </Router>
+      <AuthProvider>
+        <Router>
+          <AppRoutes />
+        </Router>
+      </AuthProvider>
     </ConfigProvider>
   );
 }
