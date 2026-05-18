@@ -10,6 +10,6 @@ export default defineConfig({
     outDir: '../../dist/renderer'
   },
   server: {
-    port: 5173
+    port: 3000  // 统一端口，与生产环境一致，共享 localStorage
   }
 });

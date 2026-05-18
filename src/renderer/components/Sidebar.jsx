@@ -21,7 +21,7 @@ function Sidebar({ onNavigate }) {
   const navigate = useNavigate();
   const [seasons, setSeasons] = useState([]);
   const [allSeasons, setAllSeasons] = useState([]);
-  const [selectedSeasons, setSelectedSeasons] = useState(['26Fall']);
+  const [selectedSeasons, setSelectedSeasons] = useState(['26Fall', '27Fall']);
   const [backupModalVisible, setBackupModalVisible] = useState(false);
 
   useEffect(() => {

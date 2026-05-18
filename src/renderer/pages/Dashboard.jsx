@@ -26,24 +26,20 @@ function Dashboard() {
   const [tasks, setTasks] = useState([]);
   const [students, setStudents] = useState([]);
   const [searchText, setSearchText] = useState('');
-  const [selectedSeasons, setSelectedSeasons] = useState(['26Fall']);
+  const [selectedSeasons, setSelectedSeasons] = useState(['26Fall', '27Fall']);
 
   useEffect(() => {
     loadData();
-    // 监听申请季筛选变化
     const handleSeasonChange = (e) => {
       setSelectedSeasons(e.detail);
     };
     window.addEventListener('seasonFilterChange', handleSeasonChange);
-    
-    // 初始加载
     const saved = localStorage.getItem('selectedSeasons');
     if (saved) {
       try {
         setSelectedSeasons(JSON.parse(saved));
       } catch (e) {}
     }
-    
     return () => {
       window.removeEventListener('seasonFilterChange', handleSeasonChange);
     };
@@ -58,7 +54,6 @@ function Dashboard() {
     setStudents(studentsData);
   };
 
-  // 根据申请季筛选学生
   const filteredStudents = students
     .filter(s => {
       const matchesSeason = selectedSeasons.includes(s.season);
@@ -68,12 +63,12 @@ function Dashboard() {
         (s.major && s.major.includes(searchText));
       return matchesSeason && matchesSearch;
     })
-    .slice(0, 5);
+    .slice(0, 8);
 
   const getStatusColor = (status) => {
     switch (status) {
       case 'overdue': return COLORS.danger;
-      case 'today': return COLORS.accent;
+      case 'today': return '#D4380D';
       default: return COLORS.warning;
     }
   };
@@ -103,27 +98,29 @@ function Dashboard() {
     {
       title: '学生',
       key: 'name',
+      width: 140,
       render: (_, record) => (
-        <Space>
+        <Space size={4}>
           <div style={{
-            width: 32, height: 32, borderRadius: '50%',
+            width: 28, height: 28, borderRadius: '50%',
             background: COLORS.primary, color: 'white',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontWeight: 600, fontSize: 12
+            fontWeight: 600, fontSize: 11
           }}>
             {record.name[0]}
           </div>
-          <span style={{ fontWeight: 500 }}>{record.name}</span>
+          <span style={{ fontWeight: 500, fontSize: 13 }}>{record.name}</span>
         </Space>
       ),
     },
     {
       title: '学校 / 专业',
       key: 'school',
+      width: 200,
       render: (_, record) => (
-        <div>
-          <div>{record.school}</div>
-          <div style={{ fontSize: 12, color: COLORS.textSecondary }}>{record.major} · GPA {record.gpa}</div>
+        <div style={{ lineHeight: 1.4 }}>
+          <div style={{ fontSize: 13 }}>{record.school}</div>
+          <div style={{ fontSize: 11, color: COLORS.textSecondary }}>{record.major} · GPA {record.gpa}</div>
         </div>
       ),
     },
@@ -131,116 +128,118 @@ function Dashboard() {
       title: '申请季',
       dataIndex: 'season',
       key: 'season',
-      render: (text) => <Tag color="blue">{text}</Tag>,
+      width: 80,
+      render: (text) => <Tag color="blue" style={{ fontSize: 11, margin: 0 }}>{text}</Tag>,
     },
     {
-      title: '文书状态',
+      title: '文书',
       key: 'docStatus',
+      width: 80,
       render: (_, record) => {
         const status = getDocStatus(record);
-        return <Tag color={status.color}>{status.text}</Tag>;
+        return <Tag color={status.color} style={{ fontSize: 11, margin: 0 }}>{status.text}</Tag>;
       },
     },
     {
-      title: '最新动态',
+      title: '动态',
       key: 'status',
+      width: 100,
       render: (_, record) => {
         const offers = record.applications?.filter(a => a.status === 'offer').length || 0;
-        if (offers > 0) return <Tag color="success">🎉 {offers}个Offer</Tag>;
+        if (offers > 0) return <Tag color="success" style={{ fontSize: 11, margin: 0 }}>🎉 {offers}个Offer</Tag>;
         const submitted = record.applications?.filter(a => a.status === 'submitted').length || 0;
-        if (submitted > 0) return <Tag color="processing">已提交{submitted}所</Tag>;
-        return <Tag>准备中</Tag>;
+        if (submitted > 0) return <Tag color="processing" style={{ fontSize: 11, margin: 0 }}>已提交{submitted}所</Tag>;
+        return <Tag style={{ fontSize: 11, margin: 0 }}>准备中</Tag>;
       },
+    },
+    {
+      title: '文案老师',
+      key: 'copywriter',
+      width: 70,
+      render: (_, record) => record.copywriter
+        ? <Tag color="purple" style={{ fontSize: 11, margin: 0 }}>{record.copywriter}</Tag>
+        : null,
     },
   ];
 
-  return (
-    <div style={{ padding: 24 }}>
-      <h2 style={{ marginBottom: 24, color: COLORS.primary }}>📊 26Fall 申请季总览</h2>
+  const statCards = [
+    { label: '在途学生', value: stats.total, sub: `↑ ${stats.newThisMonth} 本月新增`, subColor: COLORS.success, borderColor: COLORS.primary, valueColor: COLORS.primary },
+    { label: '进行中申请', value: stats.inProgress, sub: '📋 处理中', subColor: COLORS.warning, borderColor: COLORS.accent, valueColor: COLORS.accent },
+    { label: '文书待完成', value: stats.docPending, sub: '⚠️ 需跟进', subColor: COLORS.danger, borderColor: COLORS.danger, valueColor: COLORS.danger },
+    { label: 'Offer数', value: stats.offers, sub: '🎉 恭喜!', subColor: COLORS.success, borderColor: COLORS.success, valueColor: COLORS.success },
+    { label: '待跟进沟通', value: stats.pendingComm, sub: '📞 超7天未联系', subColor: COLORS.danger, borderColor: '#4A7C9B', valueColor: '#4A7C9B' },
+  ];
 
-      {/* 统计卡片 */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={12} sm={8} lg={4}>
-          <Card style={{ borderLeft: `4px solid ${COLORS.primary}` }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 32, fontWeight: 700, color: COLORS.primary }}>{stats.total}</div>
-              <div style={{ fontSize: 14, color: COLORS.textSecondary }}>在途学生</div>
-              <div style={{ fontSize: 12, color: COLORS.success, marginTop: 4 }}>↑ {stats.newThisMonth} 本月新增</div>
-            </div>
-          </Card>
-        </Col>
-        <Col xs={12} sm={8} lg={4}>
-          <Card style={{ borderLeft: `4px solid ${COLORS.accent}` }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 32, fontWeight: 700, color: COLORS.accent }}>{stats.docPending}</div>
-              <div style={{ fontSize: 14, color: COLORS.textSecondary }}>文书待完成</div>
-              <div style={{ fontSize: 12, color: COLORS.danger, marginTop: 4 }}>⚠️ 需跟进</div>
-            </div>
-          </Card>
-        </Col>
-        <Col xs={12} sm={8} lg={4}>
-          <Card style={{ borderLeft: `4px solid ${COLORS.warning}` }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 32, fontWeight: 700, color: COLORS.warning }}>{stats.offers}</div>
-              <div style={{ fontSize: 14, color: COLORS.textSecondary }}>Offer接收</div>
-              <div style={{ fontSize: 12, color: COLORS.success, marginTop: 4 }}>🎉 恭喜!</div>
-            </div>
-          </Card>
-        </Col>
-        <Col xs={12} sm={8} lg={4}>
-          <Card style={{ borderLeft: `4px solid ${COLORS.success}` }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 32, fontWeight: 700, color: COLORS.success }}>{stats.offers}</div>
-              <div style={{ fontSize: 14, color: COLORS.textSecondary }}>Offer接收</div>
-              <div style={{ fontSize: 12, color: COLORS.success, marginTop: 4 }}>🎉 恭喜!</div>
-            </div>
-          </Card>
-        </Col>
-        <Col xs={12} sm={8} lg={4}>
-          <Card style={{ borderLeft: `4px solid #4A7C9B` }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 32, fontWeight: 700, color: '#4A7C9B' }}>{stats.pendingComm}</div>
-              <div style={{ fontSize: 14, color: COLORS.textSecondary }}>待跟进沟通</div>
-              <div style={{ fontSize: 12, color: COLORS.danger, marginTop: 4 }}>📞 超7天未联系</div>
-            </div>
-          </Card>
-        </Col>
+  return (
+    <div style={{ padding: 16 }}>
+      {/* 标题 + 刷新 */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <h3 style={{ margin: 0, color: COLORS.primary }}>📊 申请季总览</h3>
+        <Button size="small" icon={<ReloadOutlined />} onClick={loadData}>刷新</Button>
+      </div>
+
+      {/* 统计卡片 - 紧凑横排 */}
+      <Row gutter={[8, 8]} style={{ marginBottom: 12 }}>
+        {statCards.map((card, i) => (
+          <Col xs={12} sm={8} md={4} key={i}>
+            <Card size="small" bodyStyle={{ padding: '10px 8px' }} style={{ borderLeft: `3px solid ${card.borderColor}`, borderRadius: 6 }}>
+              <div style={{ textAlign: 'center', lineHeight: 1.2 }}>
+                <div style={{ fontSize: 22, fontWeight: 700, color: card.valueColor }}>{card.value}</div>
+                <div style={{ fontSize: 12, color: COLORS.textSecondary }}>{card.label}</div>
+                <div style={{ fontSize: 10, color: card.subColor, marginTop: 2 }}>{card.sub}</div>
+              </div>
+            </Card>
+          </Col>
+        ))}
       </Row>
 
-      {/* 重要提醒 */}
-      <Card style={{ marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <Space>
-            <span style={{ fontSize: 16, fontWeight: 600 }}>🔔 重要提醒</span>
-            <Badge count={tasks.length} style={{ backgroundColor: COLORS.danger }} />
+      {/* 重要提醒 - 方块形式（7天内） */}
+      <Card size="small" bodyStyle={{ padding: '8px 12px' }} style={{ marginBottom: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <Space size={4}>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>🔔 重要提醒</span>
+            <Badge count={tasks.length} style={{ backgroundColor: COLORS.danger, fontSize: 10 }} />
+            <span style={{ fontSize: 11, color: COLORS.textSecondary }}>· 7天内</span>
           </Space>
-          <a onClick={() => navigate('/students')} style={{ color: COLORS.textSecondary }}>查看全部 ›</a>
+          <Space size={8}>
+            <a onClick={() => navigate('/students')} style={{ fontSize: 12, color: COLORS.textSecondary }}>学生列表 ›</a>
+            <a onClick={() => navigate('/schedule')} style={{ fontSize: 12, color: COLORS.textSecondary }}>日程管理 ›</a>
+          </Space>
         </div>
-        <Row gutter={[16, 16]}>
-          {tasks.slice(0, 6).map(task => (
-            <Col xs={24} sm={12} lg={8} xl={4} key={task.id}>
+        <Row gutter={[6, 6]}>
+          {tasks.map(task => (
+            <Col xs={24} sm={12} md={8} lg={6} key={task.id}>
               <Card
                 size="small"
+                bodyStyle={{ padding: '8px 10px' }}
                 style={{
-                  borderLeft: `4px solid ${getStatusColor(task.status)}`,
+                  borderLeft: `3px solid ${getStatusColor(task.status)}`,
                   background: task.status === 'today' ? '#FFF7ED' : 'white',
+                  cursor: 'pointer', borderRadius: 4,
+                  transition: 'all 0.15s'
+                }}
+                hoverable
+                onClick={() => {
+                  if (task.id?.startsWith('schedule-')) navigate('/schedule');
+                  else if (task.type === '沟通' && task.studentId) navigate(`/students/${task.studentId}?tab=communications`);
+                  else if (task.studentId) navigate(`/students/${task.studentId}`);
                 }}
               >
-                <Space style={{ marginBottom: 8 }}>
-                  <Tag>{getTypeIcon(task.type)} {task.type}</Tag>
-                  <span style={{ fontSize: 11, color: getStatusColor(task.status), fontWeight: 600 }}>
-                    {task.status === 'overdue' ? '已逾期' : task.status === 'today' ? '今天' : `${task.days}天后`}
+                <Space size={4} style={{ marginBottom: 4 }}>
+                  <Tag style={{ fontSize: 10, lineHeight: '16px', height: 18, margin: 0 }}>{getTypeIcon(task.type)} {task.type}</Tag>
+                  <span style={{ fontSize: 10, color: getStatusColor(task.status), fontWeight: 600 }}>
+                    {task.status === 'overdue' ? `逾期${Math.abs(task.days)}天` : task.status === 'today' ? '今日逾期' : `${task.days}天后`}
                   </span>
                 </Space>
-                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>{task.student}</div>
-                <div style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 8 }}>{task.desc}</div>
-                <div style={{ fontSize: 12, color: COLORS.textSecondary }}>📅 {task.date}</div>
+                <div style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.3, marginBottom: 2 }}>{task.student}</div>
+                <div style={{ fontSize: 11, color: COLORS.textSecondary, lineHeight: 1.3, marginBottom: 2 }}>{task.desc}</div>
+                <div style={{ fontSize: 10, color: COLORS.textSecondary }}>📅 {task.date}</div>
               </Card>
             </Col>
           ))}
           {tasks.length === 0 && (
             <Col span={24}>
-              <div style={{ textAlign: 'center', color: COLORS.textSecondary, padding: 24 }}>
+              <div style={{ textAlign: 'center', color: COLORS.textSecondary, padding: 16, fontSize: 13 }}>
                 🎉 暂无重要提醒
               </div>
             </Col>
@@ -248,33 +247,26 @@ function Dashboard() {
         </Row>
       </Card>
 
-      {/* 学生列表 */}
-      <Card>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <Space>
-            <span style={{ fontSize: 16, fontWeight: 600 }}>👥 学生列表</span>
-            <Badge count={students.length} style={{ backgroundColor: COLORS.primary }} />
+      {/* 学生列表 - 纵向 */}
+      <Card size="small" bodyStyle={{ padding: '8px 12px' }} style={{ marginBottom: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <Space size={4}>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>👥 学生列表</span>
+            <Badge count={students.length} style={{ backgroundColor: COLORS.primary, fontSize: 10 }} />
           </Space>
-          <Space>
-            <Button 
-              type="primary" 
-              size="small"
-              onClick={() => navigate('/students/new')}
-              style={{ backgroundColor: COLORS.accent }}
-            >
-              ➕ 新增学生
-            </Button>
-          </Space>
+          <Button type="primary" size="small" onClick={() => navigate('/students/new')}
+            style={{ backgroundColor: COLORS.accent, fontSize: 12, height: 24 }}>
+            ➕ 新增
+          </Button>
         </div>
-
         <Input
-          placeholder="搜索学生姓名、学校，专业..."
-          prefix={<SearchOutlined />}
-          style={{ width: 300, marginBottom: 16 }}
+          placeholder="搜索姓名/学校/专业..."
+          prefix={<SearchOutlined style={{ fontSize: 12 }} />}
+          size="small"
+          style={{ marginBottom: 8 }}
           value={searchText}
           onChange={e => setSearchText(e.target.value)}
         />
-
         <Table
           columns={columns}
           dataSource={filteredStudents}
@@ -282,36 +274,39 @@ function Dashboard() {
           pagination={false}
           size="small"
         />
-
-        <div style={{ marginTop: 16, textAlign: 'center' }}>
-          <Button onClick={() => navigate('/students')}>查看全部学生 ›</Button>
+        <div style={{ marginTop: 6, textAlign: 'center' }}>
+          <Button size="small" onClick={() => navigate('/students')} style={{ fontSize: 12 }}>
+            查看全部学生 ›
+          </Button>
         </div>
       </Card>
 
       {/* 申请进度总览 */}
-      <Card style={{ marginTop: 24 }}>
-        <h4 style={{ marginBottom: 16 }}>📈 申请季进度总览</h4>
-        <Row gutter={[32, 16]}>
+      <Card size="small" bodyStyle={{ padding: '10px 12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+          <span style={{ fontSize: 14, fontWeight: 600, marginRight: 16 }}>📈 申请季进度总览</span>
+        </div>
+        <Row gutter={[24, 8]}>
           <Col xs={24} md={8}>
-            <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
+            <div style={{ marginBottom: 4, display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
               <span>26Fall 申请进度</span>
               <span style={{ color: COLORS.accent, fontWeight: 600 }}>68%</span>
             </div>
-            <Progress percent={68} strokeColor={COLORS.accent} />
+            <Progress percent={68} strokeColor={COLORS.accent} size="small" />
           </Col>
           <Col xs={24} md={8}>
-            <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
+            <div style={{ marginBottom: 4, display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
               <span>27Fall 准备进度</span>
               <span style={{ color: COLORS.primary, fontWeight: 600 }}>35%</span>
             </div>
-            <Progress percent={35} strokeColor={COLORS.primary} />
+            <Progress percent={35} strokeColor={COLORS.primary} size="small" />
           </Col>
           <Col xs={24} md={8}>
-            <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
+            <div style={{ marginBottom: 4, display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
               <span>文书完成率</span>
               <span style={{ color: COLORS.success, fontWeight: 600 }}>82%</span>
             </div>
-            <Progress percent={82} strokeColor={COLORS.success} />
+            <Progress percent={82} strokeColor={COLORS.success} size="small" />
           </Col>
         </Row>
       </Card>

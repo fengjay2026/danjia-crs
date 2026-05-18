@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   Card, Table, Tag, Row, Col, Button, Space, Input, Select,
-  Modal, Form, DatePicker, message, Popconfirm, Typography,
-  Empty, Divider, Checkbox, Progress, Badge, Timeline
+  Modal, Form, DatePicker, message, Typography,
+  Empty, Divider, Progress, Badge, Timeline
 } from 'antd';
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, CalendarOutlined,
@@ -34,7 +34,32 @@ const TASK_TYPE_CONFIG = {
   other: { label: '其他', color: '#8C8C8C' },
 };
 
-// 模拟日程数据
+// localStorage keys
+const SCHEDULE_STORAGE_KEY = 'danjia_schedule_items';
+
+// 从 localStorage 加载日程数据
+const loadScheduleItems = () => {
+  try {
+    const saved = localStorage.getItem(SCHEDULE_STORAGE_KEY);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (e) {
+    console.error('加载日程数据失败:', e);
+  }
+  return [];
+};
+
+// 保存日程数据到 localStorage
+const saveScheduleItems = (items) => {
+  try {
+    localStorage.setItem(SCHEDULE_STORAGE_KEY, JSON.stringify(items));
+  } catch (e) {
+    console.error('保存日程数据失败:', e);
+  }
+};
+
+// 模拟日程数据（首次使用时的示例数据）
 const mockScheduleItems = [
   {
     id: 1, studentId: 1, studentName: '张同学',
@@ -56,41 +81,11 @@ const mockScheduleItems = [
     description: '预约下周三下午的口语陪练',
     createdAt: '2026-04-18',
   },
-  {
-    id: 3, studentId: 1, studentName: '张同学',
-    title: '提交港大推荐信',
-    type: 'application',
-    priority: 'high',
-    dueDate: '2026-04-20',
-    status: 'overdue',
-    description: '推荐信上传系统',
-    createdAt: '2026-04-10',
-  },
-  {
-    id: 4, studentId: 3, studentName: '王同学',
-    title: '学生家长会',
-    type: 'meeting',
-    priority: 'medium',
-    dueDate: '2026-04-30',
-    status: 'pending',
-    description: '季度家长会，汇报申请进度',
-    createdAt: '2026-04-20',
-  },
-  {
-    id: 5, studentId: 4, studentName: '赵同学',
-    title: '跟进offer回复',
-    type: 'followup',
-    priority: 'high',
-    dueDate: '2026-04-22',
-    status: 'completed',
-    description: '确认是否接受CUHK offer',
-    createdAt: '2026-04-18',
-  },
 ];
 
 const ScheduleManager = () => {
   const navigate = useNavigate();
-  const [scheduleItems, setScheduleItems] = useState(mockScheduleItems);
+  const [scheduleItems, setScheduleItems] = useState(loadScheduleItems);
   const [students, setStudents] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
@@ -100,8 +95,9 @@ const ScheduleManager = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [studentFilter, setStudentFilter] = useState('all');
   const [dueDateFilter, setDueDateFilter] = useState('all');
-  const [selectedSeasons, setSelectedSeasons] = useState(['26Fall']);
+  const [selectedSeasons, setSelectedSeasons] = useState(['26Fall', '27Fall']);
   const [form] = Form.useForm();
+  const [editingScheduleCell, setEditingScheduleCell] = useState(null); // { id, field } 内联编辑
 
   useEffect(() => {
     loadStudents();
@@ -123,6 +119,11 @@ const ScheduleManager = () => {
       window.removeEventListener('seasonFilterChange', handleSeasonChange);
     };
   }, []);
+
+  // 数据持久化：scheduleItems 变化时自动保存到 localStorage
+  useEffect(() => {
+    saveScheduleItems(scheduleItems);
+  }, [scheduleItems]);
 
   const loadStudents = () => {
     const data = getStudents();
@@ -241,15 +242,20 @@ const ScheduleManager = () => {
     message.success('日程已删除');
   };
 
-  // 切换状态
-  const toggleStatus = (id) => {
-    setScheduleItems(prev => prev.map(i => {
-      if (i.id === id) {
-        return { ...i, status: i.status === 'completed' ? 'pending' : 'completed' };
-      }
-      return i;
-    }));
-    message.success('状态已更新');
+  // 内联编辑：开始编辑
+  const startScheduleEdit = (id, field) => {
+    setEditingScheduleCell({ id, field });
+  };
+
+  // 内联编辑：保存
+  const saveScheduleEdit = (newValue) => {
+    if (!editingScheduleCell) return;
+    const { id, field } = editingScheduleCell;
+    setScheduleItems(prev => prev.map(item =>
+      item.id === id ? { ...item, [field]: newValue } : item
+    ));
+    setEditingScheduleCell(null);
+    message.success('已更新');
   };
 
   // 获取状态标签
@@ -280,27 +286,65 @@ const ScheduleManager = () => {
       key: 'status',
       width: 60,
       render: (_, record) => (
-        <Checkbox
-          checked={record.status === 'completed'}
-          onChange={() => toggleStatus(record.id)}
-        />
+        <span
+          style={{ cursor: 'pointer', display: 'inline-block' }}
+          onClick={() => handleDelete(record.id)}
+          title="点击删除此任务"
+        >
+          {getStatusTag(record.status)}
+        </span>
       ),
     },
     {
       title: '待办事项',
       key: 'title',
-      render: (_, record) => (
-        <div>
-          <div style={{ 
-            fontWeight: 500, 
-            textDecoration: record.status === 'completed' ? 'line-through' : 'none',
-            color: record.status === 'completed' ? '#8C8C8C' : '#333'
-          }}>
+      render: (_, record) => {
+        const isEditing = editingScheduleCell?.id === record.id && editingScheduleCell?.field === 'title';
+        return isEditing ? (
+          <Input
+            autoFocus size="small" defaultValue={record.title}
+            onBlur={(e) => saveScheduleEdit(e.target.value)}
+            onPressEnter={(e) => saveScheduleEdit(e.target.value)}
+            style={{ width: 180 }}
+          />
+        ) : (
+          <span
+            onClick={() => startScheduleEdit(record.id, 'title')}
+            style={{
+              fontWeight: 500, cursor: 'pointer',
+              textDecoration: record.status === 'completed' ? 'line-through' : 'none',
+              color: record.status === 'completed' ? '#8C8C8C' : '#333',
+            }}
+            title="点击修改"
+          >
             {record.title}
-          </div>
-          <div style={{ fontSize: 12, color: '#8C8C8C' }}>{record.description}</div>
-        </div>
-      ),
+          </span>
+        );
+      },
+    },
+    {
+      title: '内容详情',
+      key: 'description',
+      render: (_, record) => {
+        const isEditing = editingScheduleCell?.id === record.id && editingScheduleCell?.field === 'description';
+        return isEditing ? (
+          <Input
+            autoFocus size="small" defaultValue={record.description || ''}
+            onBlur={(e) => saveScheduleEdit(e.target.value)}
+            onPressEnter={(e) => saveScheduleEdit(e.target.value)}
+            style={{ width: 250 }}
+            placeholder="添加详情..."
+          />
+        ) : (
+          <span
+            onClick={() => startScheduleEdit(record.id, 'description')}
+            style={{ cursor: 'pointer', fontSize: 13, color: record.description ? '#555' : '#ccc' }}
+            title="点击修改"
+          >
+            {record.description || <span style={{ fontStyle: 'italic' }}>无详情</span>}
+          </span>
+        );
+      },
     },
     {
       title: '关联学生',
@@ -350,22 +394,13 @@ const ScheduleManager = () => {
       },
     },
     {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
-      width: 90,
-      render: (status) => getStatusTag(status),
-    },
-    {
       title: '操作',
       key: 'action',
       width: 100,
       render: (_, record) => (
         <Space size="small">
           <Button type="text" size="small" icon={<EditOutlined />} onClick={() => openModal(record)} />
-          <Popconfirm title="确定删除？" onConfirm={() => handleDelete(record.id)}>
-            <Button type="text" size="small" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
+          <Button type="text" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)} />
         </Space>
       ),
     },
@@ -520,9 +555,7 @@ const ScheduleManager = () => {
         title={editingItem ? '✏️ 编辑待办' : '➕ 添加待办'}
         open={modalVisible}
         onCancel={() => { setModalVisible(false); form.resetFields(); }}
-        onOk={handleSubmit}
-        okText="保存"
-        cancelText="取消"
+        footer={null}
         width={500}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit}>
@@ -574,6 +607,13 @@ const ScheduleManager = () => {
 
           <Form.Item name="description" label="详细描述">
             <TextArea rows={3} placeholder="补充说明..." />
+          </Form.Item>
+
+          <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
+            <Space>
+              <Button onClick={() => { setModalVisible(false); form.resetFields(); }}>取消</Button>
+              <Button type="primary" htmlType="submit">保存</Button>
+            </Space>
           </Form.Item>
         </Form>
       </Modal>

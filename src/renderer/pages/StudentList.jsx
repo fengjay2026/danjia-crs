@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, Table, Progress, Tag, Row, Col, Button, Space, Input, Select, Modal, message, Tooltip } from 'antd';
 import { PlusOutlined, SearchOutlined, ReloadOutlined, EyeOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { getStudents, deleteStudent } from '../data/store';
+import { getStudents, deleteStudent, updateStudent } from '../data/store';
 
 const COLORS = {
   primary: '#1E3A5F',
@@ -19,8 +19,14 @@ function StudentList() {
   const [filteredStudents, setFilteredStudents] = useState([]);
   const [searchText, setSearchText] = useState('');
   const [seasonFilter, setSeasonFilter] = useState('all');
-  const [selectedSeasons, setSelectedSeasons] = useState(['26Fall']);
+  const [selectedSeasons, setSelectedSeasons] = useState(['26Fall', '27Fall']);
   const [loading, setLoading] = useState(true);
+  const [editingCopywriter, setEditingCopywriter] = useState(null); // student id being edited
+  const [editingCategory, setEditingCategory] = useState(null); // student id being edited
+  const [editingSeason, setEditingSeason] = useState(null); // student id being edited
+
+  const COPYWRITER_OPTIONS = ['檬檬', '鑫欣', '然然', '欢欢', '外围', '其他'];
+  const CATEGORY_OPTIONS = ['中学', '本科', '硕士', '博士', '本科预科', '硕士预科'];
 
   useEffect(() => {
     loadStudents();
@@ -65,9 +71,11 @@ function StudentList() {
       );
     }
     
-    // 根据侧边栏选中的申请季过滤
+    // 根据侧边栏选中的申请季过滤（自定义申请季始终显示）
     if (selectedSeasons.length > 0 && !selectedSeasons.includes('all')) {
-      filtered = filtered.filter(s => selectedSeasons.includes(s.season));
+      filtered = filtered.filter(s =>
+        selectedSeasons.includes(s.season) || !['26Fall', '27Fall', '28Fall', '25Fall', '25Spring', '26Spring', '27Spring', '28Spring'].includes(s.season)
+      );
     }
     
     if (seasonFilter !== 'all') {
@@ -96,7 +104,9 @@ function StudentList() {
     if (!student.communications || student.communications.length === 0) {
       return { days: '无记录', color: COLORS.danger };
     }
-    const lastComm = student.communications[0];
+    // 按日期降序排序，取最新一条沟通记录
+    const sorted = [...student.communications].sort((a, b) => new Date(b.date) - new Date(a.date));
+    const lastComm = sorted[0];
     const days = Math.floor((new Date() - new Date(lastComm.date)) / (1000 * 60 * 60 * 24));
     if (days >= 14) return { days: `${days}天`, color: COLORS.danger };
     if (days >= 7) return { days: `${days}天`, color: COLORS.warning };
@@ -135,6 +145,45 @@ function StudentList() {
     if (offers > 0) progress = 100;
     
     return progress;
+  };
+
+  const saveCopywriter = (studentId, value) => {
+    if (!value) {
+      setEditingCopywriter(null);
+      return;
+    }
+    const student = students.find(s => s.id === studentId);
+    if (student) {
+      updateStudent(studentId, { ...student, copywriter: value });
+      loadStudents(); // 刷新列表
+    }
+    setEditingCopywriter(null);
+  };
+
+  const saveCategory = (studentId, value) => {
+    if (!value) {
+      setEditingCategory(null);
+      return;
+    }
+    const student = students.find(s => s.id === studentId);
+    if (student) {
+      updateStudent(studentId, { ...student, applicationCategory: value });
+      loadStudents();
+    }
+    setEditingCategory(null);
+  };
+
+  const saveSeason = (studentId, value) => {
+    if (!value) {
+      setEditingSeason(null);
+      return;
+    }
+    const student = students.find(s => s.id === studentId);
+    if (student) {
+      updateStudent(studentId, { ...student, season: value });
+      loadStudents();
+    }
+    setEditingSeason(null);
   };
 
   const columns = [
@@ -182,9 +231,83 @@ function StudentList() {
     },
     {
       title: '申请季',
-      dataIndex: 'season',
       key: 'season',
-      render: (text) => <Tag color="blue">{text}</Tag>,
+      render: (_, record) => {
+        const text = record.season;
+        if (editingSeason === record.id) {
+          return (
+            <Input
+              autoFocus
+              size="small"
+              defaultValue={text || ''}
+              style={{ width: 90 }}
+              onPressEnter={(e) => saveSeason(record.id, e.target.value)}
+              onBlur={(e) => saveSeason(record.id, e.target.value)}
+            />
+          );
+        }
+        return text
+          ? <Tag color="blue" style={{ cursor: 'pointer' }} onClick={() => setEditingSeason(record.id)}>{text}</Tag>
+          : <span onClick={() => setEditingSeason(record.id)} style={{ color: '#bbb', cursor: 'pointer' }} title="点击设置申请季">—</span>;
+      },
+    },
+    {
+      title: '申请类别',
+      key: 'applicationCategory',
+      width: 110,
+      render: (_, record) => {
+        const cat = record.applicationCategory;
+        const emojiMap = { '中学': '🎒', '本科': '🎓', '硕士': '📜', '博士': '🔬', '本科预科': '📚', '硕士预科': '📖' };
+
+        if (editingCategory === record.id) {
+          return (
+            <Select
+              autoFocus
+              size="small"
+              defaultValue={cat || undefined}
+              style={{ width: 105 }}
+              onChange={(v) => saveCategory(record.id, v)}
+              onBlur={() => setEditingCategory(null)}
+              open
+            >
+              {CATEGORY_OPTIONS.map(opt => (
+                <Select.Option key={opt} value={opt}>{emojiMap[opt] || ''} {opt}</Select.Option>
+              ))}
+            </Select>
+          );
+        }
+
+        return cat
+          ? <Tag color="geekblue" style={{ cursor: 'pointer' }} onClick={() => setEditingCategory(record.id)}>{emojiMap[cat] || ''} {cat}</Tag>
+          : <span onClick={() => setEditingCategory(record.id)} style={{ color: '#bbb', cursor: 'pointer' }} title="点击设置申请类别">—</span>;
+      },
+    },
+    {
+      title: '文案老师',
+      key: 'copywriter',
+      width: 120,
+      render: (_, record) => {
+        if (editingCopywriter === record.id) {
+          return (
+            <Select
+              autoFocus
+              size="small"
+              defaultValue={record.copywriter || undefined}
+              style={{ width: 100 }}
+              onChange={(v) => saveCopywriter(record.id, v)}
+              onBlur={() => setEditingCopywriter(null)}
+              open
+            >
+              {COPYWRITER_OPTIONS.map(opt => (
+                <Select.Option key={opt} value={opt}>{opt}</Select.Option>
+              ))}
+            </Select>
+          );
+        }
+        return record.copywriter
+          ? <Tag color="purple" style={{ cursor: 'pointer' }} onClick={() => setEditingCopywriter(record.id)}>{record.copywriter}</Tag>
+          : <span onClick={() => setEditingCopywriter(record.id)} style={{ color: '#bbb', cursor: 'pointer' }} title="点击设置文案老师">—</span>;
+      },
     },
     {
       title: '目标院校',
@@ -237,7 +360,16 @@ function StudentList() {
       key: 'docStatus',
       render: (_, record) => {
         const status = getDocStatus(record);
-        return <Tag color={status.color}>{status.text}</Tag>;
+        return (
+          <Tag
+            color={status.color}
+            style={{ cursor: 'pointer' }}
+            onClick={() => navigate(`/students/${record.id}?tab=documents`)}
+            title="点击查看文书详情"
+          >
+            {status.text}
+          </Tag>
+        );
       },
     },
     {
@@ -245,9 +377,15 @@ function StudentList() {
       key: 'lastComm',
       render: (_, record) => {
         const { days, color } = getLastCommDays(record);
-        const lastComm = record.communications?.[0];
+        // 按日期降序找最新沟通记录
+        const sorted = record.communications ? [...record.communications].sort((a, b) => new Date(b.date) - new Date(a.date)) : [];
+        const lastComm = sorted[0];
         return (
-          <div>
+          <div
+            style={{ cursor: 'pointer' }}
+            onClick={() => navigate(`/students/${record.id}?tab=communications`)}
+            title="点击查看沟通记录"
+          >
             <span style={{ color, fontWeight: 600 }}>{days}</span>
             {lastComm && (
               <div style={{ fontSize: 11, color: COLORS.textSecondary }}>
@@ -311,8 +449,8 @@ function StudentList() {
   ];
 
   return (
-    <div style={{ padding: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+    <div style={{ padding: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h2 style={{ margin: 0, color: COLORS.primary }}>👥 学生管理</h2>
         <Button 
           type="primary" 
@@ -324,25 +462,31 @@ function StudentList() {
         </Button>
       </div>
 
-      <Card style={{ marginBottom: 24 }}>
-        <Space size="large" wrap>
+      <Card size="small" style={{ marginBottom: 16 }}>
+        <Space size="middle" wrap>
           <Input
             placeholder="搜索学生姓名、学校、专业..."
             prefix={<SearchOutlined style={{ color: COLORS.textSecondary }} />}
-            style={{ width: 300 }}
+            style={{ width: 280 }}
             value={searchText}
             onChange={e => setSearchText(e.target.value)}
           />
           <Select
             value={seasonFilter}
             onChange={setSeasonFilter}
-            style={{ width: 150 }}
-            options={[
-              { value: 'all', label: '全部申请季' },
-              { value: '26Fall', label: '26Fall' },
-              { value: '27Fall', label: '27Fall' },
-              { value: '28Fall', label: '28Fall' },
-            ]}
+            style={{ width: 140 }}
+            showSearch
+            filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
+            options={(() => {
+              // 从实际数据中收集所有申请季（去重）
+              const allSeasons = [...new Set(students.map(s => s.season).filter(Boolean))];
+              const predefined = ['26Fall', '27Fall', '28Fall'];
+              const sorted = [...new Set([...predefined, ...allSeasons])];
+              return [
+                { value: 'all', label: '全部申请季' },
+                ...sorted.map(s => ({ value: s, label: s })),
+              ];
+            })()}
           />
           <Button icon={<ReloadOutlined />} onClick={loadStudents}>
             刷新
@@ -350,15 +494,17 @@ function StudentList() {
         </Space>
       </Card>
 
-      <Card>
+      <Card size="small" bodyStyle={{ padding: '8px 12px' }}>
         <Table
           columns={columns}
           dataSource={filteredStudents}
           rowKey="id"
           loading={loading}
+          size="small"
           pagination={{
-            pageSize: 10,
+            pageSize: 20,
             showSizeChanger: true,
+            pageSizeOptions: ['20', '50', '100'],
             showTotal: (total) => `共 ${total} 条`
           }}
         />

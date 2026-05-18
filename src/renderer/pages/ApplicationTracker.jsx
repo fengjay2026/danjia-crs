@@ -12,7 +12,7 @@ import {
   FieldTimeOutlined, BellOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { getStudents } from '../data/store';
+import { getStudents, updateStudent } from '../data/store';
 import dayjs from 'dayjs';
 
 const { Text, Title } = Typography;
@@ -41,23 +41,9 @@ const TYPE_CONFIG = {
 // 状态流转顺序
 const STATUS_FLOW = ['pending', 'writing', 'submitted', 'waiting', 'offer', 'reject', 'waitlist'];
 
-// 模拟申请数据
-const mockApplications = [
-  { id: 1, student_id: 1, student_name: '张同学', school: '香港大学', program: '计算机科学硕士', type: 'reach', status: 'submitted', submitted_date: '2026-04-01', result_date: '2026-06-15', notes: '第一批申请' },
-  { id: 2, student_id: 1, student_name: '张同学', school: '香港中文大学', program: '数据科学硕士', type: 'match', status: 'waiting', submitted_date: '2026-03-28', result_date: '2026-06-01', notes: '' },
-  { id: 3, student_id: 1, student_name: '张同学', school: 'NUS', program: 'CS PhD', type: 'reach', status: 'writing', submitted_date: null, result_date: null, notes: '需要陶瓷' },
-  { id: 4, student_id: 2, student_name: '李同学', school: '帝国理工学院', program: '金融硕士', type: 'reach', status: 'offer', submitted_date: '2026-01-15', result_date: '2026-04-10', notes: '已录取！' },
-  { id: 5, student_id: 2, student_name: '李同学', school: 'LSE', program: '金融与会计', type: 'match', status: 'offer', submitted_date: '2026-01-20', result_date: '2026-04-15', notes: '补交了材料' },
-  { id: 6, student_id: 2, student_name: '李同学', school: 'HKUST', program: '金融科技', type: 'safety', status: 'offer', submitted_date: '2026-02-01', result_date: '2026-03-20', notes: '' },
-  { id: 7, student_id: 3, student_name: '王同学', school: 'NUS', program: '统计学硕士', type: 'match', status: 'submitted', submitted_date: '2026-04-05', result_date: '2026-06-30', notes: '' },
-  { id: 8, student_id: 3, student_name: '王同学', school: 'NTU', program: '数据科学', type: 'safety', status: 'waiting', submitted_date: '2026-03-15', result_date: '2026-05-30', notes: '' },
-  { id: 9, student_id: 4, student_name: '赵同学', school: '香港中文大学', program: '商业分析', type: 'match', status: 'offer', submitted_date: '2026-01-10', result_date: '2026-03-25', notes: 'CUHK offer到手！' },
-  { id: 10, student_id: 5, student_name: '陈同学', school: '爱丁堡大学', program: '教育学硕士', type: 'match', status: 'writing', submitted_date: null, result_date: null, notes: '等待PS定稿' },
-];
-
 const ApplicationTracker = () => {
   const navigate = useNavigate();
-  const [applications, setApplications] = useState(mockApplications);
+  const [applications, setApplications] = useState([]);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -66,18 +52,16 @@ const ApplicationTracker = () => {
   const [typeFilter, setTypeFilter] = useState('all');
   const [studentFilter, setStudentFilter] = useState('all');
   const [searchText, setSearchText] = useState('');
-  const [selectedSeasons, setSelectedSeasons] = useState(['26Fall']);
+  const [selectedSeasons, setSelectedSeasons] = useState(['26Fall', '27Fall']);
   const [form] = Form.useForm();
 
   useEffect(() => {
-    loadStudents();
-    // 监听申请季筛选变化
+    loadApplications();
     const handleSeasonChange = (e) => {
       setSelectedSeasons(e.detail);
     };
     window.addEventListener('seasonFilterChange', handleSeasonChange);
     
-    // 初始加载
     const saved = localStorage.getItem('selectedSeasons');
     if (saved) {
       try {
@@ -90,19 +74,32 @@ const ApplicationTracker = () => {
     };
   }, []);
 
-  const loadStudents = () => {
+  const loadApplications = () => {
     const data = getStudents();
     setStudents(data);
+    const allApps = [];
+    data.forEach(student => {
+      (student.applications || []).forEach((app, idx) => {
+        allApps.push({
+          ...app,
+          _key: `${student.id}-${app.id || idx}`,
+          student_id: student.id,
+          student_name: student.name,
+          type: app.rank || 'match',
+          submitted_date: app.submittedDate || app.submitted_date || null,
+          result_date: app.resultDate || app.result_date || null,
+          notes: app.notes || '',
+        });
+      });
+    });
+    setApplications(allApps);
   };
 
-  // 根据申请季获取学生
   const getFilteredStudents = () => {
     return students.filter(s => selectedSeasons.includes(s.season));
   };
 
-  // 过滤后的申请
   const filteredApps = applications.filter(app => {
-    // 根据申请季筛选学生
     const targetStudent = students.find(s => s.id === app.student_id);
     const matchesSeason = !targetStudent || selectedSeasons.includes(targetStudent.season);
     
@@ -116,7 +113,6 @@ const ApplicationTracker = () => {
     return matchesSearch && matchesStatus && matchesType && matchesStudent && matchesSeason;
   });
 
-  // 计算统计数据
   const stats = {
     total: filteredApps.length,
     pending: filteredApps.filter(a => a.status === 'pending').length,
@@ -128,7 +124,6 @@ const ApplicationTracker = () => {
     waitlist: filteredApps.filter(a => a.status === 'waitlist').length,
   };
 
-  // 按学校统计
   const schoolStats = applications.reduce((acc, app) => {
     acc[app.school] = acc[app.school] || { total: 0, offer: 0, reject: 0, waiting: 0 };
     acc[app.school].total++;
@@ -138,7 +133,6 @@ const ApplicationTracker = () => {
     return acc;
   }, {});
 
-  // 打开新增/编辑弹窗
   const openModal = (app = null) => {
     setEditingApp(app);
     if (app) {
@@ -153,53 +147,94 @@ const ApplicationTracker = () => {
     setModalVisible(true);
   };
 
-  // 提交表单
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
+      
+      // 映射表单数据到 store 格式
       const appData = {
-        ...values,
-        submitted_date: values.submitted_date?.format('YYYY-MM-DD') || null,
-        result_date: values.result_date?.format('YYYY-MM-DD') || null,
-        student_id: editingApp?.student_id || 1,
-        student_name: editingApp?.student_name || '张同学',
+        id: editingApp ? editingApp.id : Date.now(),
+        school: values.school || '',
+        program: values.program || '',
+        rank: values.type || 'match',
+        status: values.status || 'pending',
+        submittedDate: values.submitted_date?.format('YYYY-MM-DD') || null,
+        resultDate: values.result_date?.format('YYYY-MM-DD') || null,
+        notes: values.notes || '',
       };
 
+      // 找到对应的学生
+      const targetStudent = editingApp
+        ? students.find(s => s.id === editingApp.student_id)
+        : students.find(s => s.name === values.student_name);
+
+      if (!targetStudent) {
+        message.error('未找到对应学生');
+        return;
+      }
+
+      let updatedApps;
       if (editingApp) {
-        setApplications(prev => prev.map(a => a.id === editingApp.id ? { ...a, ...appData } : a));
+        updatedApps = (targetStudent.applications || []).map(a =>
+          a.id === editingApp.id ? appData : a
+        );
         message.success('申请目标已更新');
       } else {
-        const newApp = { ...appData, id: Date.now(), status: 'pending' };
-        setApplications(prev => [...prev, newApp]);
+        updatedApps = [...(targetStudent.applications || []), appData];
         message.success('申请目标已添加');
       }
+
+      updateStudent(targetStudent.id, { applications: updatedApps });
+      loadApplications();
       setModalVisible(false);
+      setEditingApp(null);
       form.resetFields();
     } catch (err) {
       console.error('表单验证失败:', err);
     }
   };
 
-  // 删除申请
-  const handleDelete = (id) => {
-    setApplications(prev => prev.filter(a => a.id !== id));
+  const handleDelete = (key) => {
+    // key 格式: `${studentId}-${appId}`
+    const parts = key.split('-');
+    const studentId = parseInt(parts[0]);
+    const appId = parseInt(parts[1]);
+
+    const student = students.find(s => s.id === studentId);
+    if (!student) {
+      loadApplications();
+      return;
+    }
+
+    const filtered = (student.applications || []).filter(a => a.id !== appId);
+    updateStudent(studentId, { applications: filtered });
+    setApplications(prev => prev.filter(a => a._key !== key));
     message.success('申请目标已删除');
   };
 
-  // 批量状态更新
-  const handleStatusChange = (id, newStatus) => {
-    setApplications(prev => prev.map(a => a.id === id ? { ...a, status: newStatus } : a));
-    message.success(`状态已更新为 ${STATUS_CONFIG[newStatus]?.label}`);
-  };
+  // 统一的字段更新函数（直接表格内编辑 → 持久化到 localStorage）
+  const updateApplication = (key, field, value) => {
+    const parts = key.split('-');
+    const studentId = parseInt(parts[0]);
+    const appId = parseInt(parts[1]);
 
-  // 渲染状态标签
-  const renderStatusTag = (status) => {
-    const config = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
-    return (
-      <Tag icon={config.icon} color={config.color} style={{ margin: 0 }}>
-        {config.label}
-      </Tag>
-    );
+    const student = students.find(s => s.id === studentId);
+    if (!student) return;
+
+    // 字段名映射（前端字段 → store字段）
+    const storeField = field === 'type' ? 'rank' : field;
+
+    const updatedApps = (student.applications || []).map(a => {
+      if (a.id === appId) {
+        return { ...a, [storeField]: value };
+      }
+      return a;
+    });
+
+    updateStudent(studentId, { applications: updatedApps });
+    setApplications(prev => prev.map(a =>
+      a._key === key ? { ...a, [field]: value } : a
+    ));
   };
 
   // 渲染跟催进度
@@ -233,44 +268,6 @@ const ApplicationTracker = () => {
     );
   };
 
-  // 渲染状态流转时间线
-  const renderStatusTimeline = (app) => {
-    const currentIndex = STATUS_FLOW.indexOf(app.status);
-    const steps = [
-      { status: 'pending', label: '未开始', date: null },
-      { status: 'writing', label: '文书中', date: null },
-      { status: 'submitted', label: '已提交', date: app.submitted_date },
-      { status: 'waiting', label: '等待结果', date: null },
-      { status: 'offer', label: 'Offer', date: app.status === 'offer' ? app.result_date : null },
-      { status: 'reject', label: 'Reject', date: app.status === 'reject' ? app.result_date : null },
-    ];
-
-    return (
-      <Timeline
-        items={steps.map((step, idx) => {
-          const isCompleted = idx <= currentIndex;
-          const isCurrent = idx === currentIndex;
-          const isEnd = app.status === 'offer' ? step.status === 'offer' :
-                        app.status === 'reject' ? step.status === 'reject' :
-                        step.status === STATUS_FLOW[currentIndex];
-          return {
-            color: isCompleted ? '#1E3A5F' : 'gray',
-            children: (
-              <div style={{
-                opacity: isCompleted ? 1 : 0.4,
-                fontSize: isCurrent ? '13px' : '12px',
-                fontWeight: isCurrent ? 600 : 400,
-              }}>
-                <div>{step.label}</div>
-                {step.date && <Text type="secondary" style={{ fontSize: '11px' }}>{step.date}</Text>}
-              </div>
-            ),
-          };
-        })}
-      />
-    );
-  };
-
   // 表格列定义
   const columns = [
     {
@@ -299,22 +296,56 @@ const ApplicationTracker = () => {
       dataIndex: 'program',
       key: 'program',
       width: 160,
-      render: (text) => <Text><BookOutlined style={{ marginRight: 4, color: '#722ED1' }} />{text}</Text>,
+      render: (text, record) => (
+        <Input
+          value={text}
+          size="small"
+          onChange={(e) => updateApplication(record._key, 'program', e.target.value)}
+        />
+      ),
     },
     {
       title: '申请类型',
       dataIndex: 'type',
       key: 'type',
-      width: 90,
+      width: 100,
       align: 'center',
-      render: (type) => <Tag color={TYPE_CONFIG[type]?.color}>{TYPE_CONFIG[type]?.label}</Tag>,
+      render: (type, record) => (
+        <Select
+          value={type}
+          size="small"
+          onChange={(val) => updateApplication(record._key, 'type', val)}
+          style={{ minWidth: 80 }}
+        >
+          {Object.entries(TYPE_CONFIG).map(([key, val]) => (
+            <Option key={key} value={key}>
+              <Tag color={val.color} style={{ margin: 0 }}>{val.label}</Tag>
+            </Option>
+          ))}
+        </Select>
+      ),
     },
     {
       title: '当前状态',
       dataIndex: 'status',
       key: 'status',
-      width: 110,
-      render: (status) => renderStatusTag(status),
+      width: 120,
+      render: (status, record) => (
+        <Select
+          value={status}
+          size="small"
+          onChange={(val) => updateApplication(record._key, 'status', val)}
+          style={{ minWidth: 100 }}
+        >
+          {STATUS_FLOW.map(s => (
+            <Option key={s} value={s}>
+              <Tag icon={STATUS_CONFIG[s]?.icon} color={STATUS_CONFIG[s]?.color} style={{ margin: 0 }}>
+                {STATUS_CONFIG[s]?.label}
+              </Tag>
+            </Option>
+          ))}
+        </Select>
+      ),
     },
     {
       title: '跟催进度',
@@ -347,24 +378,15 @@ const ApplicationTracker = () => {
     {
       title: '操作',
       key: 'action',
-      width: 180,
+      width: 100,
       fixed: 'right',
       render: (_, record) => (
         <Space size="small">
-          <Select
-            value={record.status}
-            onChange={(val) => handleStatusChange(record.id, val)}
-            size="small"
-            style={{ width: 100 }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {STATUS_FLOW.map(s => (
-              <Option key={s} value={s}>{STATUS_CONFIG[s].label}</Option>
-            ))}
-          </Select>
-          <Button type="text" size="small" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); openModal(record); }} />
-          <Popconfirm title="确定删除？" onConfirm={(e) => { e.stopPropagation(); handleDelete(record.id); }} onCancel={(e) => e.stopPropagation()}>
-            <Button type="text" size="small" danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()} />
+          <Tooltip title="编辑详情">
+            <Button type="text" size="small" icon={<EditOutlined />} onClick={() => openModal(record)} />
+          </Tooltip>
+          <Popconfirm title="确定删除？" onConfirm={() => handleDelete(record._key)}>
+            <Button type="text" size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
       ),
@@ -377,7 +399,7 @@ const ApplicationTracker = () => {
       <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <Title level={4} style={{ margin: 0, color: '#1F2937' }}>申请追踪</Title>
-          <Text type="secondary">管理所有申请目标与状态</Text>
+          <Text type="secondary">管理所有申请目标与状态 · 直接点击类型/状态即可修改</Text>
         </div>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => openModal()}>
           新增申请目标
@@ -492,7 +514,7 @@ const ApplicationTracker = () => {
           <Table
             columns={columns}
             dataSource={filteredApps}
-            rowKey="id"
+            rowKey="_key"
             loading={loading}
             pagination={{
               pageSize: 10,
@@ -501,10 +523,6 @@ const ApplicationTracker = () => {
               showTotal: (total) => `共 ${total} 条`,
             }}
             scroll={{ x: 1200 }}
-            onRow={(record) => ({
-              onClick: () => openModal(record),
-              style: { cursor: 'pointer' },
-            })}
           />
         )}
       </Card>

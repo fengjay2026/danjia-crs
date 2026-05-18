@@ -87,7 +87,7 @@ const DocumentCenter = () => {
   const [searchText, setSearchText] = useState('');
   const [studentFilter, setStudentFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
-  const [selectedSeasons, setSelectedSeasons] = useState(['26Fall']);
+  const [selectedSeasons, setSelectedSeasons] = useState(['26Fall', '27Fall']);
   const [uploadForm] = Form.useForm();
   const [uploading, setUploading] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);

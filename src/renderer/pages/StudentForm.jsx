@@ -18,6 +18,19 @@ function StudentForm() {
   const [loading, setLoading] = useState(false);
   const isEdit = !!id && id !== 'new';
 
+  const [targetCountryOptions, setTargetCountryOptions] = useState([
+    { label: '🇭🇰 香港', value: '香港' },
+    { label: '🇸🇬 新加坡', value: '新加坡' },
+    { label: '🇬🇧 英国', value: '英国' },
+    { label: '🇺🇸 美国', value: '美国' },
+    { label: '🇦🇺 澳大利亚', value: '澳大利亚' },
+    { label: '🇨🇦 加拿大', value: '加拿大' },
+    { label: '🇪🇺 欧洲', value: '欧洲' },
+    { label: '🇯🇵 日本', value: '日本' },
+    { label: '🇰🇷 韩国', value: '韩国' },
+    { label: '🇲🇾 马来西亚', value: '马来西亚' },
+  ]);
+
   useEffect(() => {
     if (isEdit) {
       const student = getStudentById(parseInt(id));
@@ -26,7 +39,8 @@ function StudentForm() {
           name: student.name,
           major: student.major,
           gpa: student.gpa,
-          season: student.season,
+          season: student.season ? [student.season] : [],
+          applicationCategory: student.applicationCategory || '',
           targetCountries: student.targetCountries || [],
           phone: student.contact?.phone || '',
           email: student.contact?.email || '',
@@ -37,6 +51,8 @@ function StudentForm() {
           examCenter: student.ielts?.examCenter || '',
           schoolInput: student.school || '',
           targetMajorInput: student.targetMajor || '',
+          copywriter: ['檬檬', '鑫欣', '然然', '欢欢', '外围'].includes(student.copywriter) ? student.copywriter : '其他',
+          copywriterCustom: ['檬檬', '鑫欣', '然然', '欢欢', '外围'].includes(student.copywriter) ? '' : (student.copywriter || ''),
         });
       }
     }
@@ -85,7 +101,9 @@ function StudentForm() {
       school: school || '',
       targetMajor: targetMajor || values.targetMajor || '',
       targetCountries: values.targetCountries || [],
-      season: values.season || '26Fall',
+      applicationCategory: values.applicationCategory || '',
+      season: Array.isArray(values.season) ? (values.season[0] || '26Fall') : (values.season || '26Fall'),
+      copywriter: values.copywriter === '其他' ? (values.copywriterCustom || '其他') : (values.copywriter || ''),
       status: 'active',
       contact: {
         phone: values.phone || '',
@@ -156,10 +174,12 @@ function StudentForm() {
           layout="vertical"
           onFinish={onFinish}
           initialValues={{
-            season: '26Fall',
+            season: ['26Fall'],
+            applicationCategory: '',
             ieltsStatus: 'preparing',
             ieltsTarget: 7.0,
-            targetCountries: ['香港', '新加坡']
+            targetCountries: ['香港', '新加坡'],
+            copywriter: ''
           }}
         >
           <Tabs
@@ -214,65 +234,86 @@ function StudentForm() {
 
                     <Row gutter={24}>
                       <Col span={12}>
-                        <Form.Item label="申请季" name="season" rules={[{ required: true }]}>
-                          <Select 
+                        <Form.Item label="申请季" name="season" rules={[{ required: true, message: '请选择或输入申请季' }]}>
+                          <Select
+                            mode="tags"
                             size="large"
-                            placeholder="选择或输入申请季"
+                            placeholder="选择或输入申请季（支持自定义）"
                             showSearch
                             allowClear
-                            mode={undefined}
-                            popupRender={(menu) => (
-                              <>
-                                {menu}
-                                <Divider style={{ margin: '8px 0' }} />
-                                <div style={{ padding: '4px 8px' }}>
-                                  <Input
-                                    placeholder="输入自定义申请季 (如: 25Spring)"
-                                    id="customSeasonInput"
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        const input = document.getElementById('customSeasonInput');
-                                        const value = input.value.trim();
-                                        if (value) {
-                                          const select = e.target.closest('.ant-select').querySelector('.ant-select-selector');
-                                          // 通过form设置自定义值
-                                          const form = window.__studentForm;
-                                          if (form) {
-                                            form.setFieldsValue({ season: value });
-                                          }
-                                          input.value = '';
-                                        }
-                                      }
-                                    }}
-                                  />
-                                  <div style={{ fontSize: 12, color: '#8C8C8C', marginTop: 4 }}>
-                                    按 Enter 确认自定义申请季
-                                  </div>
-                                </div>
-                              </>
-                            )}
+                            style={{ width: '100%' }}
                           >
                             <Option value="26Fall">26Fall (2026年入学)</Option>
                             <Option value="27Fall">27Fall (2027年入学)</Option>
                             <Option value="28Fall">28Fall (2028年入学)</Option>
-                            <Option value="25Fall">25Fall (2025年入学)</Option>
-                            <Option value="25Spring">25Spring (2025年春季)</Option>
                           </Select>
                         </Form.Item>
                       </Col>
+                      <Col span={12}>
+                        <Form.Item label="申请类别" name="applicationCategory" rules={[{ required: true, message: '请选择申请类别' }]}>
+                          <Select placeholder="选择申请类别" size="large">
+                            <Option value="中学">🎒 中学</Option>
+                            <Option value="本科">🎓 本科</Option>
+                            <Option value="硕士">📜 硕士</Option>
+                            <Option value="博士">🔬 博士</Option>
+                            <Option value="本科预科">📚 本科预科</Option>
+                            <Option value="硕士预科">📖 硕士预科</Option>
+                          </Select>
+                        </Form.Item>
+                      </Col>
+                    </Row>
+
+                    <Row gutter={24}>
                       <Col span={24}>
                         <Form.Item label="目标国家/地区" name="targetCountries">
-                          <Select mode="multiple" placeholder="选择目标申请地区" style={{ width: '100%' }}>
-                            <Option value="香港">🇭🇰 香港</Option>
-                            <Option value="新加坡">🇸🇬 新加坡</Option>
-                            <Option value="英国">🇬🇧 英国</Option>
-                            <Option value="美国">🇺🇸 美国</Option>
-                            <Option value="澳大利亚">🇦🇺 澳大利亚</Option>
-                            <Option value="加拿大">🇨🇦 加拿大</Option>
-                            <Option value="欧洲">🇪🇺 欧洲</Option>
-                            <Option value="日本">🇯🇵 日本</Option>
-                            <Option value="韩国">🇰🇷 韩国</Option>
+                          <Select
+                            mode="tags"
+                            placeholder="选择或输入目标申请地区（支持自定义）"
+                            showSearch
+                            allowClear
+                            style={{ width: '100%' }}
+                            options={targetCountryOptions}
+                            filterOption={(input, option) =>
+                              (option?.label ?? option?.value ?? '')
+                                .toLowerCase()
+                                .includes(input.toLowerCase())
+                            }
+                          />
+                        </Form.Item>
+                      </Col>
+                    </Row>
+
+                    <Row gutter={24}>
+                      <Col span={12}>
+                        <Form.Item label="文案老师" name="copywriter">
+                          <Select
+                            size="large"
+                            placeholder="选择文案老师"
+                            onChange={(val) => {
+                              if (val !== '其他') {
+                                form.setFieldsValue({ copywriter: val });
+                              }
+                            }}
+                          >
+                            <Option value="檬檬">檬檬</Option>
+                            <Option value="鑫欣">鑫欣</Option>
+                            <Option value="然然">然然</Option>
+                            <Option value="欢欢">欢欢</Option>
+                            <Option value="外围">外围</Option>
+                            <Option value="其他">其他（可自定义）</Option>
                           </Select>
+                        </Form.Item>
+                      </Col>
+                      <Col span={12}>
+                        <Form.Item noStyle shouldUpdate={(prev, curr) => prev.copywriter !== curr.copywriter}>
+                          {({ getFieldValue }) => {
+                            const val = getFieldValue('copywriter');
+                            return val === '其他' ? (
+                              <Form.Item label="自定义文案老师" name="copywriterCustom">
+                                <Input placeholder="输入文案老师姓名" size="large" />
+                              </Form.Item>
+                            ) : null;
+                          }}
                         </Form.Item>
                       </Col>
                     </Row>

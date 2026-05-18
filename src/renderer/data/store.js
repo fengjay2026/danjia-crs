@@ -294,7 +294,8 @@ export function getStats() {
   
   const pendingComm = students.filter(s => {
     if (!s.communications || s.communications.length === 0) return true;
-    const lastComm = s.communications[0];
+    const sorted = [...s.communications].sort((a, b) => new Date(b.date) - new Date(a.date));
+    const lastComm = sorted[0];
     const daysSince = Math.floor((new Date() - new Date(lastComm.date)) / (1000 * 60 * 60 * 24));
     return daysSince >= 7;
   }).length;
@@ -319,8 +320,10 @@ export function getTasks() {
     if (student.ielts?.status === 'preparing' || student.ielts?.status === 'pending') {
       const examDate = student.ielts.expectedDate;
       if (examDate) {
-        const daysUntil = Math.floor((new Date(examDate) - new Date()) / (1000 * 60 * 60 * 24));
-        if (daysUntil <= 30 && daysUntil >= -7) {
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const target = new Date(examDate); target.setHours(0, 0, 0, 0);
+        const daysUntil = Math.floor((target - today) / (1000 * 60 * 60 * 24));
+        if (daysUntil <= 7 && daysUntil >= -7) {
           tasks.push({
             id: `ielts-${student.id}`,
             studentId: student.id,
@@ -345,8 +348,10 @@ export function getTasks() {
         // 未提交，检查截止日期
         const deadline = app.submittedDate || app.deadline;
         if (deadline) {
-          const daysUntil = Math.floor((new Date(deadline) - new Date()) / (1000 * 60 * 60 * 24));
-          if (daysUntil <= 30 && daysUntil >= 0) {
+          const today = new Date(); today.setHours(0, 0, 0, 0);
+          const target = new Date(deadline); target.setHours(0, 0, 0, 0);
+          const daysUntil = Math.floor((target - today) / (1000 * 60 * 60 * 24));
+          if (daysUntil <= 7 && daysUntil >= 0) {
             tasks.push({
               id: `app-${student.id}-${app.id}`,
               studentId: student.id,
@@ -355,7 +360,7 @@ export function getTasks() {
               desc: `${app.school} · ${app.program || '申请'}`,
               date: deadline,
               days: daysUntil,
-              status: daysUntil <= 3 ? 'overdue' : daysUntil <= 7 ? 'today' : 'soon'
+              status: daysUntil === 0 ? 'today' : 'soon'
             });
           }
         }
@@ -364,9 +369,11 @@ export function getTasks() {
     
     // 沟通提醒 - 超过7天未联系
     if (student.communications && student.communications.length > 0) {
-      const lastComm = student.communications[0];
+      // 按日期降序排序，取最新沟通记录
+      const sorted = [...student.communications].sort((a, b) => new Date(b.date) - new Date(a.date));
+      const lastComm = sorted[0];
       const daysSince = Math.floor((new Date() - new Date(lastComm.date)) / (1000 * 60 * 60 * 24));
-      if (daysSince >= 7) {
+      if (daysSince >= 7 && daysSince <= 30) {
         tasks.push({
           id: `comm-${student.id}`,
           studentId: student.id,
@@ -428,7 +435,48 @@ export function getTasks() {
       });
     }
   });
-  
+
+  // ★ 从日程管理加载待办事项（未完成的日程任务自动加入提醒）
+  try {
+    const scheduleData = localStorage.getItem('danjia_schedule_items');
+    if (scheduleData) {
+      const scheduleItems = JSON.parse(scheduleData);
+      if (Array.isArray(scheduleItems)) {
+        const typeMap = {
+          followup: '跟进', ielts: '雅思', document: '文书',
+          application: '提交', meeting: '会议', other: '其他',
+        };
+        const priorityMap = { high: '紧急', medium: '重要', low: '一般' };
+
+        scheduleItems.forEach(item => {
+          if (item.status === 'completed') return; // 已完成不提醒
+          if (!item.dueDate) return; // 无截止日期不提醒
+
+          const today = new Date(); today.setHours(0, 0, 0, 0);
+          const target = new Date(item.dueDate); target.setHours(0, 0, 0, 0);
+          const daysUntil = Math.floor((target - today) / (1000 * 60 * 60 * 24));
+
+          // 仅显示7天内或已逾期的日程
+          if (daysUntil > 7 && daysUntil >= 0) return;
+
+          tasks.push({
+            id: `schedule-${item.id}`,
+            studentId: item.studentId || null,
+            student: item.studentName || '',
+            type: typeMap[item.type] || '其他',
+            desc: `${priorityMap[item.priority] || ''} ${item.title}`.trim(),
+            date: item.dueDate,
+            days: daysUntil,
+            status: daysUntil < 0 ? 'overdue' : daysUntil === 0 ? 'today' : 'soon',
+            // 附加原数据，用于Dashboard卡片显示详情
+            schedulePriority: item.priority,
+            scheduleDesc: item.description,
+          });
+        });
+      }
+    }
+  } catch (e) { /* 忽略日程数据异常 */ }
+
   // 按紧急程度排序：已逾期 > 今天 > 7天内 > 其他
   return tasks.sort((a, b) => {
     if (a.status === 'overdue' && b.status !== 'overdue') return -1;
