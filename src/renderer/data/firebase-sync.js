@@ -81,9 +81,9 @@ export async function pushAllToFirebase() {
   if (studentsRaw) {
     const students = JSON.parse(studentsRaw);
     const studentsRef = ref(database, DB_PATHS.students);
-    // 以 id 为 key 存储，避免重复
+    // 以 s_ 为前缀存储，防止 Firebase 将纯数字 key 转为数组
     const obj = {};
-    students.forEach(s => { obj[s.id] = s; });
+    students.forEach(s => { obj[`s_${s.id}`] = s; });
     await set(studentsRef, obj);
   }
 
@@ -103,14 +103,14 @@ export async function pushAllToFirebase() {
 // 推送单条学生数据变更到 Firebase
 export async function pushStudentToFirebase(student) {
   if (!auth.currentUser) return; // 未登录 Firebase 则跳过
-  const studentRef = ref(database, `${DB_PATHS.students}/${student.id}`);
+  const studentRef = ref(database, `${DB_PATHS.students}/s_${student.id}`);
   await set(studentRef, student);
 }
 
 // 从 Firebase 删除单条学生数据
 export async function removeStudentFromFirebase(studentId) {
   if (!auth.currentUser) return;
-  const studentRef = ref(database, `${DB_PATHS.students}/${studentId}`);
+  const studentRef = ref(database, `${DB_PATHS.students}/s_${studentId}`);
   await remove(studentRef);
 }
 
