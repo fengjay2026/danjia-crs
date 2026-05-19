@@ -33,8 +33,8 @@ export function onFirebaseAuth(callback) {
 // ========== 数据读写 ==========
 
 const DB_PATHS = {
-  students: 'data/students',
-  scheduleItems: 'data/scheduleItems',
+  students: 'students',
+  scheduleItems: 'scheduleItems',
 };
 
 // 刷新 localStorage 中的学生数据（从 Firebase 拉取）
