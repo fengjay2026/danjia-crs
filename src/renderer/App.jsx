@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
@@ -13,6 +13,7 @@ import ScheduleManager from './pages/ScheduleManager';
 import LoginPage from './pages/LoginPage';
 import { useAuth } from './context/AuthContext';
 import { AuthProvider } from './context/AuthContext';
+import { initFirebaseSync } from './data/firebase-sync';
 
 const theme = {
   token: {
@@ -34,6 +35,11 @@ function RequireAuth({ children }) {
 }
 
 function App() {
+  // 启动时初始化 Firebase 同步
+  useEffect(() => {
+    initFirebaseSync();
+  }, []);
+
   return (
     <ConfigProvider theme={theme} locale={zhCN}>
       <AuthProvider>

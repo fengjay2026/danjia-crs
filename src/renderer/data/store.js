@@ -1,5 +1,6 @@
 // 学生数据存储 - 使用 localStorage（按用户隔离）
 import { getCurrentUser } from './userStore';
+import { pushStudentToFirebase, removeStudentFromFirebase } from './firebase-sync';
 
 const STORAGE_KEY_PREFIX = 'danjia_crs_students_';
 const OLD_STORAGE_KEY = 'danjia_crs_students'; // 旧版数据 key，兼容迁移
@@ -218,6 +219,10 @@ export function getStudents() {
   if (data && data.length > 0) {
     return data;
   }
+  // 如果 Firebase 已经同步过数据但 localStorage 为空，说明还没拉取到，返回空数组
+  if (localStorage.getItem('danjia_firebase_loaded') === 'true') {
+    return [];
+  }
   // 首次使用，初始化默认数据
   localStorage.setItem(getStorageKey(), JSON.stringify(defaultStudents));
   return defaultStudents;
@@ -250,6 +255,7 @@ export function addStudent(student) {
   };
   students.push(newStudent);
   localStorage.setItem(getStorageKey(), JSON.stringify(students));
+  pushStudentToFirebase(newStudent); // 同步到 Firebase
   return newStudent;
 }
 
@@ -260,6 +266,7 @@ export function updateStudent(id, updates) {
   if (index !== -1) {
     students[index] = { ...students[index], ...updates };
     localStorage.setItem(getStorageKey(), JSON.stringify(students));
+    pushStudentToFirebase(students[index]); // 同步到 Firebase
     return students[index];
   }
   return null;
@@ -270,6 +277,7 @@ export function deleteStudent(id) {
   const students = getStudents();
   const filtered = students.filter(s => s.id !== id);
   localStorage.setItem(getStorageKey(), JSON.stringify(filtered));
+  removeStudentFromFirebase(id); // 从 Firebase 删除
   return filtered;
 }
 

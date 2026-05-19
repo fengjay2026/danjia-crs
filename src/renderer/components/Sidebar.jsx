@@ -4,6 +4,7 @@ import { Badge, Modal, Button, message, Upload, Space, Tag, Tooltip, Input } fro
 import { DownloadOutlined, UploadOutlined, InboxOutlined, LogoutOutlined, CloudSyncOutlined } from '@ant-design/icons';
 import { isAdmin } from '../data/userStore';
 import { useAuth } from '../context/AuthContext';
+import { loginFirebase, pushAllToFirebase, getStoredFirebaseEmail, onFirebaseAuth } from '../data/firebase-sync';
 
 const menuItems = [
   { key: '/dashboard', label: '仪表盘', icon: '📊' },
@@ -127,28 +128,63 @@ function Sidebar({ onNavigate }) {
   function SyncButton() {
     const { user, logout } = useAuth();
     const [syncing, setSyncing] = useState(false);
+    const [fbConnected, setFbConnected] = useState(false);
     const [fbModalVisible, setFbModalVisible] = useState(false);
-    const [fbEmail, setFbEmail] = useState(localStorage.getItem('danjia_firebase_email') || 'nehfgze911@163.com');
+    const [fbEmail, setFbEmail] = useState(getStoredFirebaseEmail() || 'nehfgze911@163.com');
     const [fbPassword, setFbPassword] = useState('');
 
-    const handleSync = async () => {
+    // 监听 Firebase 登录状态
+    useEffect(() => {
+      const unsub = onFirebaseAuth((connected) => {
+        setFbConnected(connected);
+      });
+      return unsub;
+    }, []);
+
+    const handleConnect = async () => {
+      // 未连接，弹出登录框
       setFbModalVisible(true);
     };
 
-    const confirmSync = async () => {
-      setFbModalVisible(false);
+    const handlePush = async () => {
+      // 上传本地数据到云端
       setSyncing(true);
       try {
-        const { syncWithFirebase } = await import('../firebase');
-        const result = await syncWithFirebase(fbEmail, fbPassword);
-        if (result.success) {
-          message.success('本地数据已同步到云端！');
-        } else {
-          message.error(result.error || '同步失败');
-        }
+        await pushAllToFirebase();
+        message.success('本地数据已同步到云端！');
       } catch (e) {
         message.error('同步失败: ' + e.message);
       } finally {
+        setSyncing(false);
+      }
+    };
+
+    const handlePull = async () => {
+      // 从云端拉取数据到本地
+      setSyncing(true);
+      try {
+        // 重新拉取云端数据并刷新页面
+        window.location.reload();
+      } finally {
+        setSyncing(false);
+      }
+    };
+
+    const confirmConnect = async () => {
+      setFbModalVisible(false);
+      setSyncing(true);
+      try {
+        await loginFirebase(fbEmail, fbPassword);
+        // 连接成功后刷新页面，让 initFirebaseSync 自动从云端拉取数据
+        message.success('Firebase 连接成功！正在加载云端数据...');
+        setTimeout(() => window.location.reload(), 1000);
+      } catch (e) {
+        const errorMap = {
+          'auth/user-not-found': 'Firebase 邮箱未注册',
+          'auth/wrong-password': '密码错误',
+          'auth/invalid-credential': '邮箱或密码错误',
+        };
+        message.error(errorMap[e.code] || e.message || '登录失败');
         setSyncing(false);
         setFbPassword('');
       }
@@ -165,17 +201,40 @@ function Sidebar({ onNavigate }) {
           <div>
             <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, marginBottom: 6 }}>
               <span style={{ fontSize: 11 }}>👤 {user.nickname || user.username}</span>
+              {fbConnected && <Tag color="green" style={{ fontSize: 10, marginLeft: 6 }}>☁️</Tag>}
             </div>
             <Space direction="vertical" size={4} style={{ width: '100%' }}>
-              <Button
-                size="small"
-                icon={<CloudSyncOutlined />}
-                onClick={handleSync}
-                loading={syncing}
-                style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: 'none', color: 'rgba(255,255,255,0.7)', fontSize: 11 }}
-              >
-                {syncing ? '同步中...' : '同步到云端'}
-              </Button>
+              {fbConnected ? (
+                <>
+                  <Button
+                    size="small"
+                    icon={<CloudSyncOutlined />}
+                    onClick={handlePush}
+                    loading={syncing}
+                    style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: 'none', color: 'rgba(255,255,255,0.7)', fontSize: 11 }}
+                  >
+                    ⬆ 上传到云端
+                  </Button>
+                  <Button
+                    size="small"
+                    icon={<CloudSyncOutlined />}
+                    onClick={handlePull}
+                    style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: 'none', color: 'rgba(255,255,255,0.7)', fontSize: 11 }}
+                  >
+                    ⬇ 从云端拉取
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  size="small"
+                  icon={<CloudSyncOutlined />}
+                  onClick={handleConnect}
+                  loading={syncing}
+                  style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: 'none', color: 'rgba(255,255,255,0.7)', fontSize: 11 }}
+                >
+                  连接 Firebase
+                </Button>
+              )}
               <Button
                 size="small"
                 icon={<LogoutOutlined />}
@@ -186,19 +245,19 @@ function Sidebar({ onNavigate }) {
               </Button>
             </Space>
 
-            {/* Firebase 密码弹窗 */}
+            {/* Firebase 登录弹窗 */}
             <Modal
-              title="☁️ 同步到 Firebase"
+              title="☁️ 连接 Firebase 云端"
               open={fbModalVisible}
               onCancel={() => setFbModalVisible(false)}
-              onOk={confirmSync}
-              okText="同步"
+              onOk={confirmConnect}
+              okText="连接"
               cancelText="取消"
               width={400}
             >
               <div style={{ padding: '8px 0' }}>
                 <p style={{ marginBottom: 16, color: '#666' }}>
-                  将本地数据同步到 Firebase 云端数据库，其他用户登录后即可查看。
+                  输入 Firebase 邮箱密码连接云端。连接后即可从云端拉取共享数据。
                 </p>
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ fontSize: 13, color: '#333', marginBottom: 4 }}>Firebase 邮箱</div>

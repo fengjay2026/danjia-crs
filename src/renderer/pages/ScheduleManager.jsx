@@ -11,6 +11,7 @@ import {
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { getStudents } from '../data/store';
+import { pushScheduleToFirebase, removeScheduleFromFirebase } from '../data/firebase-sync';
 import dayjs from 'dayjs';
 
 const { Text, Title } = Typography;
@@ -222,11 +223,14 @@ const ScheduleManager = () => {
       };
 
       if (editingItem) {
-        setScheduleItems(prev => prev.map(i => i.id === editingItem.id ? { ...i, ...itemData } : i));
+        const updated = { ...editingItem, ...itemData };
+        setScheduleItems(prev => prev.map(i => i.id === editingItem.id ? updated : i));
+        pushScheduleToFirebase(updated);
         message.success('日程已更新');
       } else {
         const newItem = { ...itemData, id: Date.now(), createdAt: dayjs().format('YYYY-MM-DD') };
         setScheduleItems(prev => [...prev, newItem]);
+        pushScheduleToFirebase(newItem);
         message.success('日程已添加');
       }
       setModalVisible(false);
@@ -239,6 +243,7 @@ const ScheduleManager = () => {
   // 删除日程
   const handleDelete = (id) => {
     setScheduleItems(prev => prev.filter(i => i.id !== id));
+    removeScheduleFromFirebase(id);
     message.success('日程已删除');
   };
 
@@ -251,10 +256,14 @@ const ScheduleManager = () => {
   const saveScheduleEdit = (newValue) => {
     if (!editingScheduleCell) return;
     const { id, field } = editingScheduleCell;
-    setScheduleItems(prev => prev.map(item =>
+    const updatedItems = scheduleItems.map(item =>
       item.id === id ? { ...item, [field]: newValue } : item
-    ));
+    );
+    setScheduleItems(updatedItems);
     setEditingScheduleCell(null);
+    // 找到刚更新的项同步到 Firebase
+    const updated = updatedItems.find(i => i.id === id);
+    if (updated) pushScheduleToFirebase(updated);
     message.success('已更新');
   };
 
